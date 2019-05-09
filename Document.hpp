@@ -10,6 +10,8 @@ class Document{
     int width;
     int height;
 
+    bool needsSave;
+
     std::vector<char*> data;
 
     std::string filename;
@@ -40,6 +42,7 @@ public:
     int getWidth();
     int getHeight();
     std::string getFilename();
+    bool doesNeedSave();
 
 
 };

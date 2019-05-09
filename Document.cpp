@@ -11,10 +11,14 @@ using namespace std;
 
 Document::Document(std::string filename){
     this->filename = filename;
+    needsSave = true;
 }
 
 Document::~Document(){
-
+    for(int i = 0; i < data.size(); i++){
+        free(data[i]);
+    }
+    data.clear();
 }
 
 void Document::initalizeEmpty(int width, int height){
@@ -30,6 +34,7 @@ void Document::initalizeEmpty(int width, int height){
     for(int i = 0; i < width*height; i++){
         data[0][i] = ' ';
     }
+    needsSave = true;
 }
 
 bool Document::saveToFile(){
@@ -55,6 +60,7 @@ bool Document::saveToFile(string writeName){
         fclose(file);
 
         filename = writeName;
+        needsSave = false;
         return true;
     }
     return false;
@@ -126,6 +132,7 @@ bool Document::loadFromFile(){
 
 
             fclose(file);
+            needsSave = false;
             return true;
         }catch(string error){
             fclose(file);
@@ -168,6 +175,7 @@ string Document::getFilename(){
 void Document::set(int frame, int x, int y, char c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
         data[frame][y*width+x] = c;
+        needsSave = true;
     }
 }
 
@@ -175,6 +183,7 @@ void Document::insert(int frame, int x, int y, char c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
         memcpy(data[frame] + y*width+x + 1, data[frame] + y*width+x, width-x-1);
         data[frame][y*width+x] = c;
+        needsSave = true;
     }
 }
 
@@ -183,6 +192,7 @@ void Document::backspace(int frame, int x, int y, char c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
         memcpy(data[frame] + y*width+x - 1, data[frame] + y*width+x, width-x);
         data[frame][(y+1)*width-1] = c;
+        needsSave = true;
     }
 }
 
@@ -192,6 +202,7 @@ void Document::insertLine(int frame, int y){
         for(int x = 0; x < width; x++){
             data[frame][y*width+x] = ' ';
         }
+        needsSave = true;
     }
 }
 
@@ -201,6 +212,7 @@ void Document::removeLine(int frame, int y){
         for(int x = 0; x < width; x++){
             data[frame][(height-1)*width+x] = ' ';
         }
+        needsSave = true;
     }
 }
 
@@ -226,6 +238,7 @@ void Document::removeLine(int frame, int y){
         }
         width = newWidth;
         height = newHeight;
+        needsSave = true;
         return true;
     }
     return false;
@@ -241,6 +254,7 @@ void Document::insertFrameAfter(int frame, bool copyCurrent){
                 data[frame+1][y*width+x] = copyCurrent?data[frame][y*width+x]:' ';
             }
         }
+        needsSave = true;
     }
 }
 
@@ -254,6 +268,7 @@ void Document::insertFrameBefore(int frame, bool copyCurrent){
                 data[frame][y*width+x] = copyCurrent?data[frame+1][y*width+x]:' ';
             }
         }
+        needsSave = true;
     }
 }
 
@@ -262,6 +277,7 @@ void Document::removeFrame(int frame){
     if(frame >= 0 && frame < data.size()){
         free(data[frame]);
         data.erase(data.begin() + frame);
+        needsSave = true;
     }
 }
 
@@ -272,7 +288,11 @@ void Document::clearFrame(int frame){
                 data[frame][y*width+x] = ' ';
             }
         }
+        needsSave = true;
     }
 }
 
+bool Document::doesNeedSave(){
+    return needsSave;
+}
 

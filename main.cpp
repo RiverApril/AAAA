@@ -53,11 +53,32 @@ int cursorY = 0;
 bool insertMode = false;
 bool stepForward = true;
 
+int selectX1 = -1;
+int selectY1 = -1;
+int selectX2 = -1;
+int selectY2 = -1;
+bool selecting = false;
+
+#define min(a,b) (((a)<(b))?(a):(b))
+#define max(a,b) (((a)>(b))?(a):(b))
+
+#define SELECT_MIN_X min(selectX1, selectX2)
+#define SELECT_MIN_Y min(selectY1, selectY2)
+#define SELECT_MAX_X max(selectX1, selectX2)
+#define SELECT_MAX_Y max(selectY1, selectY2)
+#define SELECT_WIDTH ((SELECT_MAX_X)-(SELECT_MIN_X)+1)
+#define SELECT_HEIGHT ((SELECT_MAX_Y)-(SELECT_MIN_Y)+1)
+
+bool copiedAreaAllocated = false;
+char* copiedArea;
+int copiedWidth, copiedHeight;
+
 bool enteringCommand = false;
 
 string statusMessage = "";
 
 void processInput(int in);
+int getchSafe();
 
 
 void segVHandle(int a){
@@ -153,10 +174,17 @@ void executeCommand(){
                     didSomething = true;
                 } if(s[1] == 'q'){
                     if(l == 2){
+                        if(doc->doesNeedSave()){
+                            statusMessage = "File not saved, use :q! to force quit.";
+                        }else{
+                            running = false;
+                        }
+                        didSomething = true;
+                    }else if(l == 3 && s[2] == '!'){
                         running = false;
                         didSomething = true;
                     }
-                } else if(s[1] == 'p'){
+                } else if(s[1] == ' '){
                     if(l > 2){
                         try {
                             int fps = stoi(s+2);
@@ -241,6 +269,122 @@ void executeCommand(){
                         statusMessage = "Removed frame";
                         didSomething = true;
                     }
+                } else if(s[1] == 's'){
+                    if(l == 2){
+                        if(selecting){
+                            selecting = false;
+                            selectX2 = cursorX;
+                            selectY2 = cursorY;
+                            cursorX = SELECT_MIN_X;
+                            cursorY = SELECT_MIN_Y;
+                            statusMessage = "Finished selection.";
+                        }else{
+                            selecting = true;
+                            selectX1 = cursorX;
+                            selectY1 = cursorY;
+                            statusMessage = "Started selection.";
+                        }
+                        didSomething = true;
+                    }
+                } else if(s[1] == 'l'){
+                    if(l == 2){
+                        statusMessage = "Must provide a fill character.";
+                        didSomething = true;
+                    }else if(l == 3){
+                        if(SELECT_MIN_X > -1 && SELECT_MIN_Y > -1){
+                            int w = SELECT_WIDTH;
+                            int h = SELECT_HEIGHT;
+                            int sx = SELECT_MIN_X;
+                            int sy = SELECT_MIN_Y;
+                            for(int x = 0; x < w; x++){
+                                for(int y = 0; y < h; y++){
+                                    doc->set(displayFrame, sx+x, sy+y, s[2]);
+                                }
+                            }
+                            statusMessage = "Filled " + to_string(w) + "x" + to_string(h) + " area with \'" + s[2] + "\'";
+                        }else{
+                            statusMessage = "Must select an area to fill.";
+                        }
+                        didSomething = true;
+                    }
+                }else if(s[1] == 'y'){
+                    if(l == 2){
+                        if(SELECT_MIN_X > -1 && SELECT_MIN_Y > -1){
+                            if(copiedAreaAllocated){
+                                free(copiedArea);
+                                copiedAreaAllocated = false;
+                            }
+                            int w = SELECT_WIDTH;
+                            int h = SELECT_HEIGHT;
+                            copiedWidth = w;
+                            copiedHeight = h;
+                            int sx = SELECT_MIN_X;
+                            int sy = SELECT_MIN_Y;
+                            copiedArea = (char*)malloc(w*h);
+                            copiedAreaAllocated = true;
+                            for(int x = 0; x < w; x++){
+                                for(int y = 0; y < h; y++){
+                                    copiedArea[y*w+x] = doc->get(displayFrame, sx+x, sy+y, ' ');
+                                }
+                            }
+                            statusMessage = "Copied " + to_string(w) + "x" + to_string(h) + " area.";
+                        }else{
+                            statusMessage = "Must select an area to copy.";
+                        }
+                        didSomething = true;
+                    }
+                } else if(s[1] == 'p'){
+                    if(l == 2){
+                        if(copiedAreaAllocated){
+                            int w = copiedWidth;
+                            int h = copiedHeight;
+                            int sx = cursorX;
+                            int sy = cursorY;
+                            for(int x = 0; x < w; x++){
+                                for(int y = 0; y < h; y++){
+                                    doc->set(displayFrame, sx+x, sy+y, copiedArea[y*w+x]);
+                                }
+                            }
+                            statusMessage = "Pasted " + to_string(w) + "x" + to_string(h) + " area.";
+                        }else{
+                            statusMessage = "Must copy something first.";
+                        }
+                        didSomething = true;
+                    }
+                } else if(s[1] == '?'){
+                    if(l == 2){
+                        erase();
+                        int a = 0;
+                        mvprintw(a++, 0, "General Commands");
+                        mvprintw(a++, 0, " :?                    Show Help");
+                        mvprintw(a++, 0, " ::                    Type ':'");
+                        mvprintw(a++, 0, " : {fps}               Enter preview mode");
+                        mvprintw(a++, 0, " :w {filename}         Write to file");
+                        mvprintw(a++, 0, " :q                    Quit if saved");
+                        mvprintw(a++, 0, " :q!                   Force quit");
+                        mvprintw(a++, 0, " :wq {filename}        Write to file then quit");
+                        mvprintw(a++, 0, " :.                    Next Frame");
+                        mvprintw(a++, 0, " :,                    Previous Frame");
+                        a++;mvprintw(a++, 0, "Editor Commands");
+                        mvprintw(a++, 0, " :i                    Toggle Insert/Overrite");
+                        mvprintw(a++, 0, " :f                    Toggle Forward/Stay");
+                        mvprintw(a++, 0, " :d                    Delete Row");
+                        a++;mvprintw(a++, 0, "Selection Commands");
+                        mvprintw(a++, 0, " :s                    Start/Stop selection");
+                        mvprintw(a++, 0, " :l                    Fill selection");
+                        mvprintw(a++, 0, " :y                    Copy selection");
+                        mvprintw(a++, 0, " :p                    Paste");
+                        a++;mvprintw(a++, 0, "Frame Commands");
+                        mvprintw(a++, 0, " :r [width] [height]   Resize");
+                        mvprintw(a++, 0, " :b                    Insert empty frame before current");
+                        mvprintw(a++, 0, " :B                    Insert duplicate frame before current");
+                        mvprintw(a++, 0, " :n                    Insert empty frame after current");
+                        mvprintw(a++, 0, " :N                    Insert duplicate frame after current");
+                        mvprintw(a++, 0, " :R                    Delete current frame");
+                        refresh();
+                        getch();
+                        didSomething = true;
+                    }
                 }
             }
         }
@@ -296,7 +440,8 @@ void checkCommand(){
                         break;
                     }
                     case 'i':
-                    case 'f':{
+                    case 'f':
+                    case 's':{
                         executeCommand();
                         break;
                     }
@@ -418,6 +563,23 @@ void processInput(int in){
                     if(cursorY < 0){
                         cursorY = doc->getHeight()-1;
                     }
+                }else if(in == '\t'){
+                    displayFrame++;
+                    if(displayFrame >= doc->getFrameCount()){
+                        displayFrame = 0;
+                    }
+                    statusMessage = string("frame: ")+to_string(displayFrame);
+                }else if(in == KEY_BTAB){
+                    displayFrame--;
+                    if(displayFrame < 0){
+                        displayFrame = doc->getFrameCount()-1;
+                    }
+                    statusMessage = string("frame: ")+to_string(displayFrame);
+                }else if(in == 27){
+                    selectX1 = -1;
+                    selectY1 = -1;
+                    selectX2 = -1;
+                    selectY2 = -1;
                 }else{
                     //statusMessage = "Unknown: "+to_string(in);
                 }
@@ -464,8 +626,17 @@ void drawUi(){
             }
             bool select = false;
             if(mode == MODE_EDIT){
+                if(selecting){
+                    if(x >= min(selectX1, cursorX) && x <= max(selectX1, cursorX) && y >= min(selectY1, cursorY) && y <= max(selectY1, cursorY)){
+                        select = true;
+                    }
+                }else{
+                    if(x >= SELECT_MIN_X && x<= SELECT_MAX_X && y >= SELECT_MIN_Y && y <= SELECT_MAX_Y){
+                        select = true;
+                    }
+                }
                 if(cursorX == x && cursorY == y){
-                    select = true;
+                    select = !select;
                 }
             }
             if(select){
@@ -478,7 +649,7 @@ void drawUi(){
         }
     }
     if(mode == MODE_EDIT){
-        mvprintw(row-2, 0, "\"%s\"  [%d / %d]  (%d, %d)/(%d, %d)  %s %s", doc->getFilename().c_str(), displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta");
+        mvprintw(row-2, 0, "\"%s\"%c  [%d / %d]  (%d, %d)/(%d, %d)  %s %s", doc->getFilename().c_str(), doc->doesNeedSave()?'*':' ', displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta");
     }else if(mode == MODE_PREVIEW){
         displayFrame++;
         if(displayFrame >= doc->getFrameCount()){
@@ -521,51 +692,56 @@ int main(int argc, char* argv[]){
 
     signal(SIGSEGV, segVHandle);
 
-    if(argc >= 2){
-        docNeedsName = false;
-        char* filename = argv[1];
-        doc = new Document(filename);
+    try{
+        if(argc >= 2){
+            docNeedsName = false;
+            char* filename = argv[1];
+            doc = new Document(filename);
 
-        int width = default_width;
-        int height = default_height;
+            int width = default_width;
+            int height = default_height;
 
-        if(argc >= 3){
-            width = stoi(argv[2]);
-        }
-        if(argc >= 4){
-            height = stoi(argv[3]);
-        }
+            if(argc >= 3){
+                width = stoi(argv[2]);
+            }
+            if(argc >= 4){
+                height = stoi(argv[3]);
+            }
 
-        if(fileExists(filename)){
-            bool loaded = doc->loadFromFile();
-            if(loaded){
-                statusMessage = string("Loaded ")+filename;
+            if(fileExists(filename)){
+                bool loaded = doc->loadFromFile();
+                if(loaded){
+                    statusMessage = string("Loaded ")+filename;
+                }else{
+                    statusMessage = string("Failed to load ")+filename;
+                    doc->initalizeEmpty(width, height);
+                }
             }else{
-                statusMessage = string("Failed to load ")+filename;
+                statusMessage = string("New file ") + filename;
                 doc->initalizeEmpty(width, height);
             }
         }else{
-            statusMessage = string("New file ") + filename;
-            doc->initalizeEmpty(width, height);
+            docNeedsName = true;
+            doc = new Document("untitled");
+            doc->initalizeEmpty(default_width, default_height);
         }
-    }else{
-        docNeedsName = true;
-        doc = new Document("untitled");
-        doc->initalizeEmpty(default_width, default_height);
+
+        running = true;
+
+        commandBuffer = (char*)malloc(COMMAND_BUFFER_SIZE+1);
+        commandBuffer[0] = '\0';
+
+        while(running){
+            drawUi();
+            int in = getchSafe();
+            processInput(in);
+        }
+
+        free(commandBuffer);
+
+    }catch(const std::exception& e){
+
     }
-
-    running = true;
-
-    commandBuffer = (char*)malloc(COMMAND_BUFFER_SIZE+1);
-    commandBuffer[0] = '\0';
-
-    while(running){
-        drawUi();
-        int in = getchSafe();
-        processInput(in);
-    }
-
-    free(commandBuffer);
 
     endwin();
 
