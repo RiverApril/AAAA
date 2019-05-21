@@ -147,7 +147,7 @@ void executeCommand(){
     bool didSomething = false;
 
     if(l > 0){
-        if(s[0] == ':'){
+        if(s[0] == ';'){
             if(l > 1){
                 if(s[1] == 'w'){
                     string writeName = doc->getFilename();
@@ -184,7 +184,7 @@ void executeCommand(){
                         running = false;
                         didSomething = true;
                     }
-                } else if(s[1] == ' '){
+                } else if(s[1] == 'P'){
                     if(l > 2){
                         try {
                             int fps = stoi(s+2);
@@ -230,26 +230,26 @@ void executeCommand(){
                         statusMessage = "Deleted Row";
                         didSomething = true;
                     }
-                } else if(s[1] == 'b'){
+                } else if(s[1] == 'B'){
                     if(l == 2){
                         doc->insertFrameBefore(displayFrame, false);
                         statusMessage = "Added empty frame";
                         didSomething = true;
                     }
-                } else if(s[1] == 'B'){
+                } else if(s[1] == 'b'){
                     if(l == 2){
                         doc->insertFrameBefore(displayFrame, true);
                         statusMessage = "Added duplicate frame";
                         didSomething = true;
                     }
-                } else if(s[1] == 'n'){
+                } else if(s[1] == 'N'){
                     if(l == 2){
                         doc->insertFrameAfter(displayFrame, false);
                         displayFrame++;
                         statusMessage = "Added empty frame";
                         didSomething = true;
                     }
-                } else if(s[1] == 'N'){
+                } else if(s[1] == 'n'){
                     if(l == 2){
                         doc->insertFrameAfter(displayFrame, true);
                         displayFrame++;
@@ -356,31 +356,31 @@ void executeCommand(){
                         erase();
                         int a = 0;
                         mvprintw(a++, 0, "General Commands");
-                        mvprintw(a++, 0, " :?                    Show Help");
-                        mvprintw(a++, 0, " ::                    Type ':'");
-                        mvprintw(a++, 0, " : {fps}               Enter preview mode");
-                        mvprintw(a++, 0, " :w {filename}         Write to file");
-                        mvprintw(a++, 0, " :q                    Quit if saved");
-                        mvprintw(a++, 0, " :q!                   Force quit");
-                        mvprintw(a++, 0, " :wq {filename}        Write to file then quit");
-                        mvprintw(a++, 0, " :.                    Next Frame");
-                        mvprintw(a++, 0, " :,                    Previous Frame");
+                        mvprintw(a++, 0, " ;?                    Show Help");
+                        mvprintw(a++, 0, " ;;                    Type ':'");
+                        mvprintw(a++, 0, " ;P {fps}              Enter preview mode");
+                        mvprintw(a++, 0, " ;w {filename}         Write to file");
+                        mvprintw(a++, 0, " ;q                    Quit if saved");
+                        mvprintw(a++, 0, " ;q!                   Force quit");
+                        mvprintw(a++, 0, " ;wq {filename}        Write to file then quit");
+                        mvprintw(a++, 0, " ;.                    Next Frame");
+                        mvprintw(a++, 0, " ;,                    Previous Frame");
                         a++;mvprintw(a++, 0, "Editor Commands");
-                        mvprintw(a++, 0, " :i                    Toggle Insert/Overrite");
-                        mvprintw(a++, 0, " :f                    Toggle Forward/Stay");
-                        mvprintw(a++, 0, " :d                    Delete Row");
+                        mvprintw(a++, 0, " ;i                    Toggle Insert/Overrite");
+                        mvprintw(a++, 0, " ;f                    Toggle Forward/Stay");
+                        mvprintw(a++, 0, " ;d                    Delete Row");
                         a++;mvprintw(a++, 0, "Selection Commands");
-                        mvprintw(a++, 0, " :s                    Start/Stop selection");
-                        mvprintw(a++, 0, " :l                    Fill selection");
-                        mvprintw(a++, 0, " :y                    Copy selection");
-                        mvprintw(a++, 0, " :p                    Paste");
+                        mvprintw(a++, 0, " ;s                    Start/Stop selection");
+                        mvprintw(a++, 0, " ;l                    Fill selection");
+                        mvprintw(a++, 0, " ;y                    Copy selection");
+                        mvprintw(a++, 0, " ;p                    Paste");
                         a++;mvprintw(a++, 0, "Frame Commands");
-                        mvprintw(a++, 0, " :r [width] [height]   Resize");
-                        mvprintw(a++, 0, " :b                    Insert empty frame before current");
-                        mvprintw(a++, 0, " :B                    Insert duplicate frame before current");
-                        mvprintw(a++, 0, " :n                    Insert empty frame after current");
-                        mvprintw(a++, 0, " :N                    Insert duplicate frame after current");
-                        mvprintw(a++, 0, " :R                    Delete current frame");
+                        mvprintw(a++, 0, " ;r [width] [height]   Resize");
+                        mvprintw(a++, 0, " ;b                    Insert duplicate frame before current");
+                        mvprintw(a++, 0, " ;B                    Insert empty frame before current");
+                        mvprintw(a++, 0, " ;n                    Insert duplicate frame after current");
+                        mvprintw(a++, 0, " ;N                    Insert empty frame after current");
+                        mvprintw(a++, 0, " ;R                    Delete current frame");
                         refresh();
                         getch();
                         didSomething = true;
@@ -409,11 +409,11 @@ void checkCommand(){
     bool reprocess = false;
 
     if(l > 0){
-        if(s[0] == ':'){
+        if(s[0] == ';'){
             if(l > 1){
                 switch(s[1]){
-                    case ':':{
-                        reprocessIn = ':';
+                    case ';':{
+                        reprocessIn = ';';
                         reprocess = true;
                         enteringCommand = false;
                         didSomething = true;
@@ -441,7 +441,11 @@ void checkCommand(){
                     }
                     case 'i':
                     case 'f':
-                    case 's':{
+                    case 's':
+                    case 'n':
+                    case 'b':
+                    case 'N':
+                    case 'B':{
                         executeCommand();
                         break;
                     }
@@ -478,9 +482,13 @@ void processInput(int in){
                 }else if((in == KEY_BACKSPACE || in == 127) && commandBufferIndex > 0){
                     commandBufferIndex--;
                     commandBuffer[commandBufferIndex] = '\0';
+                }else if(in == 27){
+                    commandBufferIndex = 0;
+                    commandBuffer[commandBufferIndex] = '\0';
+                    enteringCommand = false;
                 }
             }else{
-                if(in == ':' && commandBufferIndex == 0){
+                if(in == ';' && commandBufferIndex == 0){
                     enteringCommand = true;
                     processInput(in);
                 }else if(in >= ' ' && in <= '~'){
