@@ -140,6 +140,22 @@ void saveFile(string name, bool noName){
     }
 }
 
+char hflipChar(char c){
+    switch(c){
+        case '(': return ')';
+        case ')': return '(';
+        case '[': return ']';
+        case ']': return '[';
+        case '{': return '}';
+        case '}': return '{';
+        case '/': return '\\';
+        case '\\': return '/';
+        case '<': return '>';
+        case '>': return '<';
+        default: return c;
+    }
+}
+
 void executeCommand(){
     const char* s = commandBuffer;
     const int l = commandBufferIndex;
@@ -351,6 +367,24 @@ void executeCommand(){
                         }
                         didSomething = true;
                     }
+                } else if(s[1] == 'o'){
+                    if(l == 2){
+                        if(copiedAreaAllocated){
+                            int w = copiedWidth;
+                            int h = copiedHeight;
+                            int sx = cursorX;
+                            int sy = cursorY;
+                            for(int x = 0; x < w; x++){
+                                for(int y = 0; y < h; y++){
+                                    doc->set(displayFrame, sx+(w-x-1), sy+y, hflipChar(copiedArea[y*w+x]));
+                                }
+                            }
+                            statusMessage = "Pasted Flipped " + to_string(w) + "x" + to_string(h) + " area.";
+                        }else{
+                            statusMessage = "Must copy something first.";
+                        }
+                        didSomething = true;
+                    }
                 } else if(s[1] == '?'){
                     if(l == 2){
                         erase();
@@ -374,6 +408,7 @@ void executeCommand(){
                         mvprintw(a++, 0, " ;l                    Fill selection");
                         mvprintw(a++, 0, " ;y                    Copy selection");
                         mvprintw(a++, 0, " ;p                    Paste");
+                        mvprintw(a++, 0, " ;o                    Paste Horizontally Flipped");
                         a++;mvprintw(a++, 0, "Frame Commands");
                         mvprintw(a++, 0, " ;r [width] [height]   Resize");
                         mvprintw(a++, 0, " ;b                    Insert duplicate frame before current");
@@ -382,7 +417,7 @@ void executeCommand(){
                         mvprintw(a++, 0, " ;N                    Insert empty frame after current");
                         mvprintw(a++, 0, " ;R                    Delete current frame");
                         refresh();
-                        getch();
+                        while(getch() != 27);
                         didSomething = true;
                     }
                 }
