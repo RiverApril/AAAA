@@ -15,25 +15,6 @@ using namespace std;
 
 #define COMMAND_BUFFER_SIZE 255
 
-#define C_DARK_BLACK 0x0 // white when background is black
-#define C_DARK_RED 0x1
-#define C_DARK_GREEN 0x2
-#define C_DARK_YELLOW 0x3
-#define C_DARK_BLUE 0x4
-#define C_DARK_MAGENTA 0x5
-#define C_DARK_CYAN 0x6
-#define C_DARK_WHITE 0x7
-
-#define C_LIGHT_BLACK 0x8
-#define C_LIGHT_RED 0x9
-#define C_LIGHT_GREEN 0xA
-#define C_LIGHT_YELLOW 0xB
-#define C_LIGHT_BLUE 0xC
-#define C_LIGHT_MAGENTA 0xD
-#define C_LIGHT_CYAN 0xE
-#define C_LIGHT_WHITE 0xF
-
-
 Document* doc;
 bool docNeedsName;
 
@@ -52,6 +33,7 @@ int cursorX = 0;
 int cursorY = 0;
 bool insertMode = false;
 bool stepForward = true;
+int colorMode = 0;
 
 int selectX1 = -1;
 int selectY1 = -1;
@@ -70,7 +52,7 @@ bool selecting = false;
 #define SELECT_HEIGHT ((SELECT_MAX_Y)-(SELECT_MIN_Y)+1)
 
 bool copiedAreaAllocated = false;
-char* copiedArea;
+cell* copiedArea;
 int copiedWidth, copiedHeight;
 
 bool enteringCommand = false;
@@ -156,6 +138,19 @@ char hflipChar(char c){
     }
 }
 
+cell hflipChar(cell c){
+    return cell(hflipChar(c.text), c.fg, c.bg);
+}
+
+cell cellFromCharBasedOnMode(char c, cell now){
+    if(colorMode){
+        unsigned char color = charToColor(c);
+        return cell(now.text, (colorMode==1)?color:now.fg, (colorMode==2)?color:now.bg);
+    }else{
+        return cell(c, now.fg, now.bg);
+    }
+}
+
 void executeCommand(){
     const char* s = commandBuffer;
     const int l = commandBufferIndex;
@@ -237,7 +232,31 @@ void executeCommand(){
                 } else if(s[1] == 'f'){
                     if(l == 2){
                         stepForward = !stepForward;
-                        statusMessage = string("Step Forward ") + (stepForward?"on":"off");
+                        statusMessage = string("Step forward ") + (stepForward?"on":"off");
+                        didSomething = true;
+                    }
+                } else if(s[1] == 'c' || s[1] == 'C'){
+                    if(l == 2){
+                        int newMode = 0;
+                        if(s[1] == 'c'){
+                            newMode = 1;
+                        }else{
+                            newMode = 2;
+                        }
+
+                        if(colorMode == newMode){
+                            colorMode = 0;
+                        }else{
+                            colorMode = newMode;
+                        }
+
+                        string str = "error";
+                        switch(colorMode){
+                            case 0: str = "off"; break;
+                            case 1: str = "foreground"; break;
+                            case 2: str = "background"; break;
+                        }
+                        statusMessage = string("Color mode ") + str;
                         didSomething = true;
                     }
                 } else if(s[1] == 'd'){
@@ -314,7 +333,8 @@ void executeCommand(){
                             int sy = SELECT_MIN_Y;
                             for(int x = 0; x < w; x++){
                                 for(int y = 0; y < h; y++){
-                                    doc->set(displayFrame, sx+x, sy+y, s[2]);
+                                    cell now = doc->get(displayFrame, sx+x, sy+y, cell(' ', 0, 0));
+                                    doc->set(displayFrame, sx+x, sy+y, cellFromCharBasedOnMode(s[2], now));
                                 }
                             }
                             statusMessage = "Filled " + to_string(w) + "x" + to_string(h) + " area with \'" + s[2] + "\'";
@@ -336,11 +356,11 @@ void executeCommand(){
                             copiedHeight = h;
                             int sx = SELECT_MIN_X;
                             int sy = SELECT_MIN_Y;
-                            copiedArea = (char*)malloc(w*h);
+                            copiedArea = (cell*)malloc(w*h*sizeof(cell));
                             copiedAreaAllocated = true;
                             for(int x = 0; x < w; x++){
                                 for(int y = 0; y < h; y++){
-                                    copiedArea[y*w+x] = doc->get(displayFrame, sx+x, sy+y, ' ');
+                                    copiedArea[y*w+x] = doc->get(displayFrame, sx+x, sy+y, cell(' ', 0, 0));
                                 }
                             }
                             statusMessage = "Copied " + to_string(w) + "x" + to_string(h) + " area.";
@@ -402,6 +422,8 @@ void executeCommand(){
                         a++;mvprintw(a++, 0, "Editor Commands");
                         mvprintw(a++, 0, " ;i                    Toggle Insert/Overrite");
                         mvprintw(a++, 0, " ;f                    Toggle Forward/Stay");
+                        mvprintw(a++, 0, " ;c                    Toggle FG Color Mode");
+                        mvprintw(a++, 0, " ;C                    Toggle BG Color Mode");
                         mvprintw(a++, 0, " ;d                    Delete Row");
                         a++;mvprintw(a++, 0, "Selection Commands");
                         mvprintw(a++, 0, " ;s                    Start/Stop selection");
@@ -476,6 +498,8 @@ void checkCommand(){
                     }
                     case 'i':
                     case 'f':
+                    case 'c':
+                    case 'C':
                     case 's':
                     case 'n':
                     case 'b':
@@ -527,10 +551,11 @@ void processInput(int in){
                     enteringCommand = true;
                     processInput(in);
                 }else if(in >= ' ' && in <= '~'){
+                    cell now = doc->get(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     if(insertMode){
-                        doc->insert(displayFrame, cursorX, cursorY, in);
+                        doc->insert(displayFrame, cursorX, cursorY, cellFromCharBasedOnMode(in, now));
                     }else{
-                        doc->set(displayFrame, cursorX, cursorY, in);
+                        doc->set(displayFrame, cursorX, cursorY, cellFromCharBasedOnMode(in, now));
                     }
                     if(stepForward){
                         cursorX++;
@@ -543,7 +568,7 @@ void processInput(int in){
                         }
                     }
                 } else if(in == 330){
-                    doc->set(displayFrame, cursorX, cursorY, ' ');
+                    doc->set(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     if(insertMode){
                         cursorX++;
                         if(cursorX >= doc->getWidth()){
@@ -553,7 +578,7 @@ void processInput(int in){
                                 cursorY = 0;
                             }
                         }
-                        doc->backspace(displayFrame, cursorX, cursorY, ' ');
+                        doc->backspace(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                         cursorX--;
                         if(cursorX < 0){
                             cursorX = doc->getWidth() - 1;
@@ -565,7 +590,7 @@ void processInput(int in){
                     }
                 } else if((in == KEY_BACKSPACE || in == 127)){
                     if(insertMode){
-                        doc->backspace(displayFrame, cursorX, cursorY, ' ');
+                        doc->backspace(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     }
                     cursorX--;
                     if(cursorX < 0){
@@ -576,7 +601,7 @@ void processInput(int in){
                         }
                     }
                     if(!insertMode){
-                        doc->set(displayFrame, cursorX, cursorY, ' ');
+                        doc->set(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     }
                 } else if(in == '\n'){
                     if(insertMode){
@@ -655,7 +680,8 @@ void drawUi(){
     for(int y = displayMinY; y <= displayMaxY; y++){
         move(y-displayMinY, 0);
         for(int x = displayMinX; x <= displayMaxX; x++){
-            char c = doc->get(displayFrame, x, y, ' ');
+            cell cl = doc->get(displayFrame, x, y, cell(' ', 0, 0));
+            char c = cl.text;
             if((x == -1 || x == doc->getWidth()) && (y == -1 || y == doc->getHeight())){
                 c = '+';
             }else if((y == -1 || y == doc->getHeight()) && (x >= 0 && x < doc->getWidth())){
@@ -682,6 +708,7 @@ void drawUi(){
                     select = !select;
                 }
             }
+            attrset(getColorPair(cl.fg, cl.bg));
             if(select){
                 attrset(getColorPair(C_DARK_BLACK, C_LIGHT_WHITE));
             }
@@ -692,7 +719,7 @@ void drawUi(){
         }
     }
     if(mode == MODE_EDIT){
-        mvprintw(row-2, 0, "\"%s\"%c  [%d / %d]  (%d, %d)/(%d, %d)  %s %s", doc->getFilename().c_str(), doc->doesNeedSave()?'*':' ', displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta");
+        mvprintw(row-2, 0, "\"%s\"%c  [%d / %d]  (%d, %d)/(%d, %d)  %s %s", doc->getFilename().c_str(), doc->doesNeedSave()?'*':' ', displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta", colorMode?((colorMode==1)?"colfg":"colbg"):"txt");
     }else if(mode == MODE_PREVIEW){
         displayFrame++;
         if(displayFrame >= doc->getFrameCount()){

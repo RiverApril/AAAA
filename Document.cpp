@@ -30,9 +30,9 @@ void Document::initalizeEmpty(int width, int height){
     }
     data.clear();
 
-    data.push_back((char*)malloc(width*height));
+    data.push_back((cell*)malloc(width*height*(sizeof(cell))));
     for(int i = 0; i < width*height; i++){
-        data[0][i] = ' ';
+        data[0][i] = cell(' ', 0, 0);
     }
     needsSave = true;
 }
@@ -41,17 +41,84 @@ bool Document::saveToFile(){
     return saveToFile(filename);
 }
 
+char colorToChar(unsigned char c){
+    switch(c){
+        case C_LIGHT_BLACK: return 'k';
+        case C_LIGHT_RED: return 'r';
+        case C_LIGHT_GREEN: return 'g';
+        case C_LIGHT_YELLOW: return 'y';
+        case C_LIGHT_BLUE: return 'b';
+        case C_LIGHT_MAGENTA: return 'm';
+        case C_LIGHT_CYAN: return 'c';
+        case C_LIGHT_WHITE: return 'w';
+
+        case C_DARK_BLACK: return ' ';
+        case C_DARK_RED: return 'R';
+        case C_DARK_GREEN: return 'G';
+        case C_DARK_YELLOW: return 'Y';
+        case C_DARK_BLUE: return 'B';
+        case C_DARK_MAGENTA: return 'M';
+        case C_DARK_CYAN: return 'C';
+        case C_DARK_WHITE: return 'W';
+        default: return ' ';
+    }
+}
+
+unsigned char charToColor(char c){
+    switch(c){
+        case 'w': return C_LIGHT_WHITE;
+        case 'r': return C_LIGHT_RED;
+        case 'g': return C_LIGHT_GREEN;
+        case 'y': return C_LIGHT_YELLOW;
+        case 'b': return C_LIGHT_BLUE;
+        case 'm': return C_LIGHT_MAGENTA;
+        case 'c': return C_LIGHT_CYAN;
+        case 'k': return C_LIGHT_BLACK;
+
+        case 'W': return C_DARK_WHITE;
+        case 'R': return C_DARK_RED;
+        case 'G': return C_DARK_GREEN;
+        case 'Y': return C_DARK_YELLOW;
+        case 'B': return C_DARK_BLUE;
+        case 'M': return C_DARK_MAGENTA;
+        case 'C': return C_DARK_CYAN;
+        case 'K': return C_DARK_BLACK;
+        case ' ': return C_DARK_BLACK;
+        default: return 0;
+    }
+}
+
 bool Document::saveToFile(string writeName){
 
     FILE* file = fopen(writeName.c_str(), "w");
 
     if(file){
 
-        fprintf(file, "AAAA %d %d %d\n", CURRENT_FILE_VERSION, width, height);
+
+        bool hasColor = false;
+        for(int i = 0; i < data.size() && !hasColor; i++){
+            for(int y = 0; y < height && !hasColor; y++){
+                for(int x = 0; x < width && !hasColor; x++){
+                    if(data[i][y*width+x].fg != 0 || data[i][y*width+x].bg != 0){
+                        hasColor = true;
+                    }
+                }
+            }
+        }
+
+        fprintf(file, "AAAA %d %d %d\n", hasColor?VERSION_COLOR:VERSION_NORMAL, width, height);
         for(int i = 0; i < data.size(); i++){
             for(int y = 0; y < height; y++){
                 for(int x = 0; x < width; x++){
-                    fputc(data[i][y*width+x], file);
+                    fputc(data[i][y*width+x].text, file);
+                }
+                if(hasColor){
+                    for(int x = 0; x < width; x++){
+                        fputc(colorToChar(data[i][y*width+x].fg), file);
+                    }
+                    for(int x = 0; x < width; x++){
+                        fputc(colorToChar(data[i][y*width+x].bg), file);
+                    }
                 }
                 fputc('\n', file);
             }
@@ -91,7 +158,55 @@ bool Document::loadFromFile(){
                 throw (string("Failed to read version number."));
             }
 
-            if(version == 1){
+            if(version == VERSION_COLOR){
+
+                int width, height;
+                if(fscanf(file, "%d %d", &width, &height) != 2){
+                    throw (string("Failed to read one or both of: width, height."));
+                }
+                
+                char c;
+                do{
+                    c = fgetc(file);
+                }while(!feof(file) && c != '\n');
+
+                this->width = width;
+                this->height = height;
+
+                bool reading = true;
+                int frame = -1;
+                while(reading){
+                    for(int y = 0; y < height; y++){
+                        char line[width*4];
+                        if(fgets(line, width*4, file) == NULL){
+                            reading = false;
+                            break;
+                        }
+                        if(y == 0){
+                            data.push_back((cell*)malloc(width*height*(sizeof(cell))));
+                            frame++;
+                            for(int i = 0; i < width*height; i++){
+                                data[frame][i] = cell(' ', 0, 0);
+                            }
+                        }
+                        int i = 0;
+                        for(int x = 0; x < width; x++){
+                            data[frame][y*width + x].text = line[i];
+                            i++;
+                        }
+                        for(int x = 0; x < width; x++){
+                            data[frame][y*width + x].fg = charToColor(line[i]);
+                            i++;
+                        }
+                        for(int x = 0; x < width; x++){
+                            data[frame][y*width + x].bg = charToColor(line[i]);
+                            i++;
+                        }
+                        //memcpy(data[frame] + y*width, line, width);
+                    }
+                }
+
+            }else if(version == VERSION_NORMAL){
 
                 int width, height;
                 if(fscanf(file, "%d %d", &width, &height) != 2){
@@ -116,13 +231,20 @@ bool Document::loadFromFile(){
                             break;
                         }
                         if(y == 0){
-                            data.push_back((char*)malloc(width*height));
+                            data.push_back((cell*)malloc(width*height*(sizeof(cell))));
                             frame++;
                             for(int i = 0; i < width*height; i++){
-                                data[frame][i] = ' ';
+                                data[frame][i] = cell(' ', 0, 0);
                             }
                         }
-                        memcpy(data[frame] + y*width, line, width);
+                        int i = 0;
+                        for(int x = 0; x < width; x++){
+                            data[frame][y*width + x].text = line[i];
+                            data[frame][y*width + x].fg = 0;
+                            data[frame][y*width + x].bg = 0;
+                            i++;
+                        }
+                        //memcpy(data[frame] + y*width, line, width);
                     }
                 }
 
@@ -149,7 +271,7 @@ bool Document::loadFromFile(){
 }
 
 
-char Document::get(int frame, int x, int y, char ifError){
+cell Document::get(int frame, int x, int y, cell ifError){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
         return data[frame][y*width+x];
     }
@@ -172,25 +294,25 @@ string Document::getFilename(){
     return filename;
 }
 
-void Document::set(int frame, int x, int y, char c){
+void Document::set(int frame, int x, int y, cell c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
         data[frame][y*width+x] = c;
         needsSave = true;
     }
 }
 
-void Document::insert(int frame, int x, int y, char c){
+void Document::insert(int frame, int x, int y, cell c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
-        memcpy(data[frame] + y*width+x + 1, data[frame] + y*width+x, width-x-1);
+        memcpy(data[frame] + y*width+x + 1, data[frame] + y*width+x, (width-x-1) * sizeof(cell));
         data[frame][y*width+x] = c;
         needsSave = true;
     }
 }
 
 
-void Document::backspace(int frame, int x, int y, char c){
+void Document::backspace(int frame, int x, int y, cell c){
     if(frame >= 0 && frame < data.size() && x >= 0 && x < width && y >= 0 && y < height){
-        memcpy(data[frame] + y*width+x - 1, data[frame] + y*width+x, width-x);
+        memcpy(data[frame] + y*width+x - 1, data[frame] + y*width+x, (width-x)*sizeof(cell));
         data[frame][(y+1)*width-1] = c;
         needsSave = true;
     }
@@ -198,9 +320,9 @@ void Document::backspace(int frame, int x, int y, char c){
 
 void Document::insertLine(int frame, int y){
     if(frame >= 0 && frame < data.size() && y >= 0 && y < height){
-        memcpy(data[frame] + (y+1)*width, data[frame] + y*width, width*height-(y+1)*width);
+        memcpy(data[frame] + (y+1)*width, data[frame] + y*width, (width*height-(y+1)*width)*sizeof(cell));
         for(int x = 0; x < width; x++){
-            data[frame][y*width+x] = ' ';
+            data[frame][y*width+x] = cell(' ', 0, 0);
         }
         needsSave = true;
     }
@@ -210,7 +332,7 @@ void Document::removeLine(int frame, int y){
     if(frame >= 0 && frame < data.size() && y >= 0 && y < height){
         memcpy(data[frame] + y*width, data[frame] + (y+1)*width, width*height-y*width);
         for(int x = 0; x < width; x++){
-            data[frame][(height-1)*width+x] = ' ';
+            data[frame][(height-1)*width+x] = cell(' ', 0, 0);
         }
         needsSave = true;
     }
@@ -219,10 +341,10 @@ void Document::removeLine(int frame, int y){
  bool Document::resize(int newWidth, int newHeight){
     if(newWidth > 0 && newHeight > 0){
         for(int i = 0; i < data.size(); i++){
-            char* newFrame = (char*)malloc(newWidth*newHeight);
+            cell* newFrame = (cell*)malloc(newWidth*newHeight*sizeof(cell));
             for(int y = 0; y < newHeight; y++){
                 for(int x = 0; x < newWidth; x++){
-                    newFrame[y*newWidth+x] = ' ';
+                    newFrame[y*newWidth+x] = cell(' ', 0, 0);
                 }
             }
             
@@ -246,12 +368,12 @@ void Document::removeLine(int frame, int y){
 
 void Document::insertFrameAfter(int frame, bool copyCurrent){
     if(frame >= 0 && frame < data.size()){
-        char* newFrame = (char*)malloc(width*height);
+        cell* newFrame = (cell*)malloc(width*height*sizeof(cell));
         data.insert(data.begin() + frame + 1, newFrame);
         
         for(int y = 0; y < height; y++){
             for(int x = 0; x < width; x++){
-                data[frame+1][y*width+x] = copyCurrent?data[frame][y*width+x]:' ';
+                data[frame+1][y*width+x] = copyCurrent?data[frame][y*width+x]:cell(' ', 0, 0);
             }
         }
         needsSave = true;
@@ -260,12 +382,12 @@ void Document::insertFrameAfter(int frame, bool copyCurrent){
 
 void Document::insertFrameBefore(int frame, bool copyCurrent){
     if(frame >= 0 && frame < data.size()){
-        char* newFrame = (char*)malloc(width*height);
+        cell* newFrame = (cell*)malloc(width*height*sizeof(cell));
         data.insert(data.begin() + frame, newFrame);
         
         for(int y = 0; y < height; y++){
             for(int x = 0; x < width; x++){
-                data[frame][y*width+x] = copyCurrent?data[frame+1][y*width+x]:' ';
+                data[frame][y*width+x] = copyCurrent?data[frame+1][y*width+x]:cell(' ', 0, 0);
             }
         }
         needsSave = true;
@@ -285,7 +407,7 @@ void Document::clearFrame(int frame){
     if(frame >= 0 && frame < data.size()){
         for(int y = 0; y < height; y++){
             for(int x = 0; x < width; x++){
-                data[frame][y*width+x] = ' ';
+                data[frame][y*width+x] = cell(' ', 0, 0);
             }
         }
         needsSave = true;
