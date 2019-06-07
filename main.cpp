@@ -719,7 +719,7 @@ void drawUi(){
         }
     }
     if(mode == MODE_EDIT){
-        mvprintw(row-2, 0, "\"%s\"%c  [%d / %d]  (%d, %d)/(%d, %d)  %s %s", doc->getFilename().c_str(), doc->doesNeedSave()?'*':' ', displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta", colorMode?((colorMode==1)?"colfg":"colbg"):"txt");
+        mvprintw(row-2, 0, "\"%s\"%c  [%d / %d]  (%d, %d)/(%d, %d)  %s %s %s", doc->getFilename().c_str(), doc->doesNeedSave()?'*':' ', displayFrame+1, doc->getFrameCount(), cursorX+1, cursorY+1, doc->getWidth(), doc->getHeight(), insertMode?"ins":"ovr", stepForward?"fwd":"sta", colorMode?((colorMode==1)?"colfg":"colbg"):"txt");
     }else if(mode == MODE_PREVIEW){
         displayFrame++;
         if(displayFrame >= doc->getFrameCount()){
