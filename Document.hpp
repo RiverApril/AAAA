@@ -55,6 +55,7 @@ class Document{
 public:
 
     Document(std::string filename);
+    Document(const Document *other);
     ~Document();
 
     void initalizeEmpty(int width, int height);

@@ -14,6 +14,20 @@ Document::Document(std::string filename){
     needsSave = true;
 }
 
+Document::Document(const Document *other){
+    filename = other->filename;
+    needsSave = other->needsSave;
+    width = other->width;
+    height = other->height;
+
+    for(int i = 0; i < other->data.size(); i++){
+        data.push_back((cell*)malloc(width*height*(sizeof(cell))));
+        for(int p = 0; p < width*height; p++){
+            data[i][p] = other->data[i][p];
+        }
+    }
+}
+
 Document::~Document(){
     for(int i = 0; i < data.size(); i++){
         free(data[i]);

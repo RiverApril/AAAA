@@ -16,6 +16,7 @@ using namespace std;
 #define COMMAND_BUFFER_SIZE 255
 
 Document* doc;
+Document* lastDoc;
 bool docNeedsName;
 
 bool running;
@@ -157,6 +158,8 @@ void executeCommand(){
 
     bool didSomething = false;
 
+    Document tempDoc = Document(doc);
+
     if(l > 0){
         if(s[0] == ';'){
             if(l > 1){
@@ -183,7 +186,7 @@ void executeCommand(){
                     }
                     saveFile(writeName, noName);
                     didSomething = true;
-                } if(s[1] == 'q'){
+                } else if(s[1] == 'q'){
                     if(l == 2){
                         if(doc->doesNeedSave()){
                             statusMessage = "File not saved, use :q! to force quit.";
@@ -223,7 +226,7 @@ void executeCommand(){
                         }
                         didSomething = true;
                     }
-                }else if(s[1] == 'i'){
+                } else if(s[1] == 'i'){
                     if(l == 2){
                         insertMode = !insertMode;
                         statusMessage = string("Insert mode ") + (insertMode?"on":"off");
@@ -343,7 +346,7 @@ void executeCommand(){
                         }
                         didSomething = true;
                     }
-                }else if(s[1] == 'y'){
+                } else if(s[1] == 'y'){
                     if(l == 2){
                         if(SELECT_MIN_X > -1 && SELECT_MIN_Y > -1){
                             if(copiedAreaAllocated){
@@ -411,7 +414,7 @@ void executeCommand(){
                         int a = 0;
                         mvprintw(a++, 0, "General Commands");
                         mvprintw(a++, 0, " ;?                    Show Help");
-                        mvprintw(a++, 0, " ;;                    Type ':'");
+                        mvprintw(a++, 0, " ;;                    Type ';'");
                         mvprintw(a++, 0, " ;P {fps}              Enter preview mode");
                         mvprintw(a++, 0, " ;w {filename}         Write to file");
                         mvprintw(a++, 0, " ;q                    Quit if saved");
@@ -419,6 +422,8 @@ void executeCommand(){
                         mvprintw(a++, 0, " ;wq {filename}        Write to file then quit");
                         mvprintw(a++, 0, " ;.                    Next Frame");
                         mvprintw(a++, 0, " ;,                    Previous Frame");
+                        mvprintw(a++, 0, " ;z                    Undo");
+                        //mvprintw(a++, 0, " ;Z                    Redo");
                         a++;mvprintw(a++, 0, "Editor Commands");
                         mvprintw(a++, 0, " ;i                    Toggle Insert/Overrite");
                         mvprintw(a++, 0, " ;f                    Toggle Forward/Stay");
@@ -439,12 +444,33 @@ void executeCommand(){
                         mvprintw(a++, 0, " ;N                    Insert empty frame after current");
                         mvprintw(a++, 0, " ;R                    Delete current frame");
                         refresh();
-                        while(getch() != 27);
+                        while(true){
+                            char c = getch();
+                            if(c == 27 || c == ';'){
+                                break;
+                            }
+                        }
+                        didSomething = true;
+                    }
+                } else if(s[1] == 'z'){
+                    if(l == 2){
+                        delete doc;
+                        doc = new Document(lastDoc);
+
+                        if(displayFrame >= doc->getFrameCount()){
+                            displayFrame = doc->getFrameCount()-1;
+                        }
+
                         didSomething = true;
                     }
                 }
             }
         }
+    }
+
+    if(didSomething){
+        delete lastDoc;
+        lastDoc = new Document(&tempDoc);
     }
 
     if(!didSomething && commandBufferIndex != 0){
@@ -504,7 +530,8 @@ void checkCommand(){
                     case 'n':
                     case 'b':
                     case 'N':
-                    case 'B':{
+                    case 'B':
+                    case 'z':{
                         executeCommand();
                         break;
                     }
@@ -523,6 +550,10 @@ void checkCommand(){
 }
 
 void processInput(int in){
+
+    bool didSomething = false;
+    Document tempDoc = Document(doc);
+
     switch(mode){
 
         case MODE_EDIT:{
@@ -568,6 +599,7 @@ void processInput(int in){
                         }
                     }
                 } else if(in == 330){
+                    cell now = doc->get(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     doc->set(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     if(insertMode){
                         cursorX++;
@@ -578,7 +610,7 @@ void processInput(int in){
                                 cursorY = 0;
                             }
                         }
-                        doc->backspace(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
+                        doc->backspace(displayFrame, cursorX, cursorY, cellFromCharBasedOnMode(' ', now));
                         cursorX--;
                         if(cursorX < 0){
                             cursorX = doc->getWidth() - 1;
@@ -589,8 +621,9 @@ void processInput(int in){
                         }
                     }
                 } else if((in == KEY_BACKSPACE || in == 127)){
+                    cell now = doc->get(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
                     if(insertMode){
-                        doc->backspace(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
+                        doc->backspace(displayFrame, cursorX, cursorY, cellFromCharBasedOnMode(' ', now));
                     }
                     cursorX--;
                     if(cursorX < 0){
@@ -601,7 +634,7 @@ void processInput(int in){
                         }
                     }
                     if(!insertMode){
-                        doc->set(displayFrame, cursorX, cursorY, cell(' ', 0, 0));
+                        doc->set(displayFrame, cursorX, cursorY, cellFromCharBasedOnMode(' ', now));
                     }
                 } else if(in == '\n'){
                     if(insertMode){
@@ -665,6 +698,11 @@ void processInput(int in){
             break;
         }
 
+    }
+
+    if(didSomething){
+        delete lastDoc;
+        lastDoc = new Document(&tempDoc);
     }
 }
 
@@ -757,7 +795,7 @@ int main(int argc, char* argv[]){
     const int default_width = 40;
     const int default_height = 20;
     
-    printf("Initalizing curses...");
+    printf("Initalizing curses...\n");
     initalizeCurses();
 
     signal(SIGSEGV, segVHandle);
@@ -795,6 +833,8 @@ int main(int argc, char* argv[]){
             doc = new Document("untitled");
             doc->initalizeEmpty(default_width, default_height);
         }
+
+        lastDoc = new Document(doc);
 
         running = true;
 
